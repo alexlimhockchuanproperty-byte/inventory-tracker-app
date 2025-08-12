@@ -3,205 +3,216 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sample Inventory Tracker</title>
+    <title>QR Inventory App</title>
+    <!-- Use Tailwind CSS for a clean, modern design -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        /* Custom styles for the app */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .container {
+            max-width: 420px; /* Max width for mobile-first design */
         }
     </style>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
-<body class="bg-gray-100 p-4 min-h-screen flex flex-col items-center justify-center">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="container bg-white p-6 rounded-3xl shadow-2xl flex flex-col items-center">
+        <!-- Header Section -->
+        <h1 class="text-3xl font-bold text-gray-800 mb-2 text-center">QR Inventory</h1>
+        <p class="text-sm text-gray-500 mb-6 text-center">Scan to update inventory</p>
 
-    <div class="max-w-md w-full bg-white p-6 rounded-xl shadow-lg">
-        <h1 class="text-2xl font-bold text-center mb-6 text-gray-800">Sample Inventory Tracker</h1>
-
-        <!-- NEW: Product Name field -->
-        <div class="mb-4">
-            <label for="productName" class="block text-sm font-medium text-gray-700">Product Name</label>
-            <input type="text" id="productName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border bg-gray-50 text-gray-500 cursor-not-allowed" readonly>
+        <!-- Product Display Section -->
+        <div class="w-full text-center bg-blue-50 p-4 rounded-xl mb-6 shadow-inner">
+            <p class="text-gray-600">Product Name:</p>
+            <p id="product-name-display" class="font-semibold text-lg text-blue-800 break-words">Scan a QR Code</p>
         </div>
 
-        <div class="mb-4">
-            <label for="uniqueId" class="block text-sm font-medium text-gray-700">Unique ID</label>
-            <input type="text" id="uniqueId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+        <!-- Current Status and Unique ID Display -->
+        <div class="w-full flex justify-between items-center mb-6">
+            <div class="text-center">
+                <p class="text-sm text-gray-500">Unique ID:</p>
+                <p id="unique-id-display" class="font-mono text-gray-700 font-bold break-words">N/A</p>
+            </div>
+            <div class="text-center">
+                <p class="text-sm text-gray-500">Last Action:</p>
+                <p id="status-display" class="font-bold text-gray-700">None</p>
+            </div>
         </div>
 
-        <!-- NEW: Camera selection dropdown -->
-        <div class="mb-4">
-            <label for="camera-select" class="block text-sm font-medium text-gray-700">Select Camera</label>
-            <select id="camera-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></select>
-        </div>
-
-        <div class="flex space-x-4 mb-6">
-            <button id="addBtn" class="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-semibold shadow-md hover:bg-green-700 transition duration-300 ease-in-out">
-                Add Sample
+        <!-- Buttons Section -->
+        <div class="flex space-x-4 w-full">
+            <button id="add-button" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 active:bg-green-700">
+                Add
             </button>
-            <button id="deductBtn" class="flex-1 bg-red-600 text-white py-3 px-4 rounded-lg font-semibold shadow-md hover:bg-red-700 transition duration-300 ease-in-out">
-                Take Sample
+            <button id="deduct-button" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 active:bg-red-700">
+                Deduct
             </button>
         </div>
 
-        <div id="scanner-container" class="relative w-full h-64 bg-gray-200 rounded-lg overflow-hidden mb-6">
-            <!-- This is where the scanner will appear -->
+        <!-- Message Box -->
+        <div id="message-box" class="w-full mt-6 p-4 rounded-xl text-center transition-all duration-300" style="display: none;">
+            <p id="message-text" class="text-sm font-medium"></p>
         </div>
-
-        <div id="statusMessage" class="text-center p-3 rounded-lg text-sm transition duration-300"></div>
     </div>
 
     <script>
-        // Your specific Google Apps Script Web App URL has been added here.
-        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzc_DHjGdUEMmHjLb8pBB8rk_wZzew_yCRFm44DV3ogFYssmjo3BkVFqnV-tCgzBMst/exec';
+        // --- CONFIGURATION ---
+        // Replace with your Google Apps Script web app URL
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzc_DHjGdUEMmHjLb8pBB8rk_wZzew_yCRFm44DV3ogFYssmjo3BkVFqnV-tCgzBMst/exec";
 
-        const uniqueIdInput = document.getElementById('uniqueId');
-        const productNameInput = document.getElementById('productName');
-        const addBtn = document.getElementById('addBtn');
-        const deductBtn = document.getElementById('deductBtn');
-        const statusMessage = document.getElementById('statusMessage');
-        const cameraSelect = document.getElementById('camera-select');
-        const scannerContainer = document.getElementById('scanner-container');
+        // --- DOM Elements ---
+        const uniqueIdDisplay = document.getElementById('unique-id-display');
+        const productNameDisplay = document.getElementById('product-name-display');
+        const statusDisplay = document.getElementById('status-display');
+        const addButton = document.getElementById('add-button');
+        const deductButton = document.getElementById('deduct-button');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
 
-        let html5QrCode = null;
+        let scannedUniqueId = null;
 
-        // Function to start the QR code scanner with the selected camera
-        async function startScanner() {
-            if (html5QrCode) {
-                await html5QrCode.stop().catch(console.warn);
-            }
-            
-            const selectedCameraId = cameraSelect.value;
-            if (!selectedCameraId) {
-                console.error("No camera selected.");
-                return;
-            }
-
-            html5QrCode = new Html5Qrcode(scannerContainer.id);
-
-            html5QrCode.start(
-                selectedCameraId, { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    console.log(`Scan result: ${decodedText}`);
-                    uniqueIdInput.value = decodedText;
-                    // NEW: Fetch product details after a successful scan
-                    fetchProductDetails(decodedText);
-                    html5QrCode.stop().catch(err => console.error("Failed to stop scanner after scan:", err));
-                },
-                (errorMessage) => {
-                    console.error(errorMessage);
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Function to handle the QR code scan result
+            window.addEventListener('message', async (event) => {
+                const qrCodeResult = event.data;
+                if (qrCodeResult) {
+                    scannedUniqueId = qrCodeResult;
+                    // Fetch product details immediately after a scan
+                    await fetchProductDetails(scannedUniqueId);
                 }
-            ).catch(err => {
-                console.error("Failed to start scanner:", err);
-                showMessage("Could not start camera. Please check permissions.", 'bg-red-100 text-red-700');
             });
-        }
 
-        // NEW: Function to fetch product details from Google Apps Script
+            addButton.addEventListener('click', () => {
+                if (scannedUniqueId) {
+                    updateInventory('add');
+                } else {
+                    showMessage('Please scan a QR code first.', 'error');
+                }
+            });
+
+            deductButton.addEventListener('click', () => {
+                if (scannedUniqueId) {
+                    updateInventory('deduct');
+                } else {
+                    showMessage('Please scan a QR code first.', 'error');
+                }
+            });
+        });
+
+        // --- Functions ---
+        
+        /**
+         * Fetches product details from the Google Apps Script web app using a GET request.
+         * @param {string} uniqueId The unique ID from the QR code.
+         */
         async function fetchProductDetails(uniqueId) {
-            productNameInput.value = 'Loading...';
-            const url = `${GOOGLE_APP_SCRIPT_URL}?uniqueId=${encodeURIComponent(uniqueId)}`;
+            showMessage('Fetching product details...', 'info');
+            uniqueIdDisplay.textContent = uniqueId;
+
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`${WEB_APP_URL}?uniqueId=${uniqueId}`, {
                     method: 'GET',
                     mode: 'cors'
                 });
-                const data = await response.json();
 
-                if (data.success) {
-                    productNameInput.value = data.productName;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // CRITICAL FIX: Ensure the retrieved productName is explicitly a string
+                    const productName = result.productName ? result.productName.toString() : 'Unknown Product';
+                    productNameDisplay.textContent = productName;
+                    showMessage(`Found product: ${productName}`, 'success');
                 } else {
-                    productNameInput.value = 'Product Not Found';
-                    showMessage(data.message, 'bg-red-100 text-red-700');
+                    productNameDisplay.textContent = 'Not Found';
+                    showMessage(result.message, 'error');
                 }
             } catch (error) {
                 console.error('Error fetching product details:', error);
-                productNameInput.value = 'Error';
-                showMessage('Network error fetching product details.', 'bg-red-100 text-red-700');
+                productNameDisplay.textContent = 'Error';
+                showMessage('Failed to fetch product details. Check the web app URL and console.', 'error');
             }
         }
 
-        // Populate the camera selection dropdown
-        Html5Qrcode.getCameras().then(cameras => {
-            if (cameras && cameras.length) {
-                cameras.forEach(camera => {
-                    const option = document.createElement('option');
-                    option.value = camera.id;
-                    option.text = camera.label || `Camera ${cameras.indexOf(camera) + 1}`;
-                    cameraSelect.appendChild(option);
-                });
-                const backCamera = cameras.find(camera => camera.label.toLowerCase().includes('back') || camera.label.toLowerCase().includes('rear'));
-                if (backCamera) {
-                    cameraSelect.value = backCamera.id;
-                } else {
-                    cameraSelect.value = cameras[0].id;
-                }
-                startScanner();
-            } else {
-                showMessage('No cameras found on this device.', 'bg-red-100 text-red-700');
-            }
-        }).catch(err => {
-            console.error("Error getting cameras:", err);
-            showMessage('Error accessing camera information.', 'bg-red-100 text-red-700');
-        });
-
-        cameraSelect.addEventListener('change', startScanner);
-
-        async function updateSheet(action) {
-            const uniqueId = uniqueIdInput.value.trim();
-            if (!uniqueId) {
-                showMessage('Please enter a unique ID or scan a code.', 'bg-yellow-100 text-yellow-700');
-                return;
-            }
-
-            if (GOOGLE_APP_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-                showMessage('Please set up your Google Apps Script URL.', 'bg-red-100 text-red-700');
-                return;
-            }
-
+        /**
+         * Sends a POST request to the Google Apps Script web app to update inventory.
+         * @param {string} action The action to perform ('add' or 'deduct').
+         */
+        async function updateInventory(action) {
+            showMessage('Updating inventory...', 'info');
+            
             const payload = {
-                uniqueId: uniqueId,
+                uniqueId: scannedUniqueId,
                 action: action
             };
 
-            showMessage(`Sending request to Google Sheet for ID: ${uniqueId}...`, 'bg-gray-100 text-gray-700');
-
             try {
-                const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
+                const response = await fetch(WEB_APP_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
+                    mode: 'cors',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payload)
                 });
-                showMessage(`Request sent for ID: ${uniqueId}. Please check your sheet.`, 'bg-green-100 text-green-700');
-                uniqueIdInput.value = '';
-                productNameInput.value = ''; // Clear the product name field
-                startScanner();
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDisplay.textContent = action === 'add' ? 'Added' : 'Deducted';
+                    showMessage(result.message, 'success');
+                } else {
+                    statusDisplay.textContent = 'Failed';
+                    showMessage(result.message, 'error');
+                }
             } catch (error) {
-                console.error('Network Error:', error);
-                showMessage('Network error. Failed to send request.', 'bg-red-100 text-red-700');
-                startScanner();
+                console.error('Error updating inventory:', error);
+                statusDisplay.textContent = 'Error';
+                showMessage('Failed to update inventory. Check the web app URL and console.', 'error');
             }
         }
 
-        function showMessage(message, colorClass) {
-            statusMessage.textContent = message;
-            statusMessage.className = `text-center p-3 rounded-lg text-sm transition duration-300 ${colorClass}`;
+        /**
+         * Displays a temporary message in the message box.
+         * @param {string} message The message to display.
+         * @param {string} type The type of message ('success', 'error', 'info').
+         */
+        function showMessage(message, type) {
+            messageBox.style.display = 'block';
+            messageText.textContent = message;
+
+            // Remove existing classes
+            messageBox.classList.remove('bg-green-100', 'bg-red-100', 'bg-blue-100');
+            messageText.classList.remove('text-green-800', 'text-red-800', 'text-blue-800');
+
+            // Add new classes based on message type
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100');
+                messageText.classList.add('text-green-800');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100');
+                messageText.classList.add('text-red-800');
+            } else {
+                messageBox.classList.add('bg-blue-100');
+                messageText.classList.add('text-blue-800');
+            }
+
+            // Hide the message after a few seconds
             setTimeout(() => {
-                statusMessage.textContent = '';
-                statusMessage.className = 'text-center p-3 rounded-lg text-sm transition duration-300';
+                messageBox.style.display = 'none';
             }, 5000);
         }
-
-        addBtn.addEventListener('click', () => updateSheet('add'));
-        deductBtn.addEventListener('click', () => updateSheet('deduct'));
     </script>
 </body>
 </html>
-
-
-
-
-
