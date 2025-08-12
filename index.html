@@ -120,6 +120,10 @@
                 console.error('Error fetching product details:', error);
                 productNameInput.value = 'Error';
                 showMessage('Network error fetching product details.', 'bg-red-100 text-red-700');
+                finally {
+                // Restart the scanner after a delay, regardless of success or failure
+                setTimeout(startScanner, 2000);
+            }
             }
         }
 
@@ -202,3 +206,4 @@
     </script>
 </body>
 </html>
+
