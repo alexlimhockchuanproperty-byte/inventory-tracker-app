@@ -11,7 +11,6 @@
             font-family: 'Inter', sans-serif;
         }
     </style>
-    <!-- New: html5-qrcode for barcode and QR code scanning. This is a free, open-source alternative. -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="bg-gray-100 p-4 min-h-screen flex flex-col items-center justify-center">
@@ -22,6 +21,12 @@
         <div class="mb-4">
             <label for="uniqueId" class="block text-sm font-medium text-gray-700">Enter Unique ID or Scan</label>
             <input type="text" id="uniqueId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+        </div>
+
+        <!-- NEW: Camera selection dropdown -->
+        <div class="mb-4">
+            <label for="camera-select" class="block text-sm font-medium text-gray-700">Select Camera</label>
+            <select id="camera-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500"></select>
         </div>
 
         <div class="flex space-x-4 mb-6">
@@ -41,34 +46,80 @@
     </div>
 
     <script>
-        // Placeholder for your Google Apps Script Web App URL
+        // Your specific Google Apps Script Web App URL has been added here.
         const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyGdXeGYT9Cc4owSejSgSHxU2I6VvVoUnqtm58hNyh02nZWJoDc9-OfaQjD6Z9YQcvA/exec';
 
         const uniqueIdInput = document.getElementById('uniqueId');
         const addBtn = document.getElementById('addBtn');
         const deductBtn = document.getElementById('deductBtn');
         const statusMessage = document.getElementById('statusMessage');
+        const cameraSelect = document.getElementById('camera-select');
+        const scannerContainer = document.getElementById('scanner-container');
 
-        // New: Initialize the Html5QrcodeScanner
-        const html5QrCode = new Html5QrcodeScanner(
-            "scanner-container", { fps: 10, qrbox: { width: 250, height: 250 } }
-        );
+        let html5QrCode = null;
 
-        // Define the function that runs when a QR code is successfully scanned
-        const onScanSuccess = (decodedText, decodedResult) => {
-            console.log(`Scan result: ${decodedText}`, decodedResult);
-            // Put the decoded text into the input field
-            uniqueIdInput.value = decodedText;
-            // Stop scanning after a successful scan
-            html5QrCode.stop().then(ignore => {
-                console.log("Scanner stopped.");
-            }).catch(err => {
-                console.log("Failed to stop scanner.");
+        // Function to start the QR code scanner with the selected camera
+        async function startScanner() {
+            if (html5QrCode) {
+                // Stop any previous scanner instance
+                await html5QrCode.stop().catch(console.warn);
+            }
+            
+            const selectedCameraId = cameraSelect.value;
+            if (!selectedCameraId) {
+                console.error("No camera selected.");
+                return;
+            }
+
+            // Create a new instance of Html5Qrcode
+            html5QrCode = new Html5Qrcode(scannerContainer.id);
+
+            // Start the scanner with the selected camera
+            html5QrCode.start(
+                selectedCameraId, { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    // onScanSuccess function
+                    console.log(`Scan result: ${decodedText}`);
+                    uniqueIdInput.value = decodedText;
+                    html5QrCode.stop().catch(err => console.error("Failed to stop scanner after scan:", err));
+                },
+                (errorMessage) => {
+                    // onError function
+                    console.error(errorMessage);
+                }
+            ).catch(err => {
+                console.error("Failed to start scanner:", err);
+                showMessage("Could not start camera. Please check permissions.", 'bg-red-100 text-red-700');
             });
-        };
-        
-        // Start the scanner
-        html5QrCode.render(onScanSuccess);
+        }
+
+        // Populate the camera selection dropdown
+        Html5Qrcode.getCameras().then(cameras => {
+            if (cameras && cameras.length) {
+                cameras.forEach(camera => {
+                    const option = document.createElement('option');
+                    option.value = camera.id;
+                    option.text = camera.label || `Camera ${cameras.indexOf(camera) + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+                // Automatically select the back camera if available
+                const backCamera = cameras.find(camera => camera.label.toLowerCase().includes('back') || camera.label.toLowerCase().includes('rear'));
+                if (backCamera) {
+                    cameraSelect.value = backCamera.id;
+                } else {
+                    cameraSelect.value = cameras[0].id; // Fallback to the first camera
+                }
+                startScanner();
+            } else {
+                showMessage('No cameras found on this device.', 'bg-red-100 text-red-700');
+            }
+        }).catch(err => {
+            console.error("Error getting cameras:", err);
+            showMessage('Error accessing camera information.', 'bg-red-100 text-red-700');
+        });
+
+        // Event listener for when the user changes the camera selection
+        cameraSelect.addEventListener('change', startScanner);
 
         // Function to update Google Sheet
         async function updateSheet(action) {
@@ -89,8 +140,6 @@
             };
 
             try {
-                // Using 'no-cors' mode is necessary for this type of request to Google Apps Script.
-                // It means we can't inspect the response status directly, but the request will be sent.
                 const response = await fetch(GOOGLE_APP_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -100,9 +149,9 @@
                     body: JSON.stringify(payload)
                 });
                 showMessage(`Successfully sent request to ${action === 'add' ? 'add' : 'deduct'} one unit for ID: ${uniqueId}`, 'bg-green-100 text-green-700');
-                uniqueIdInput.value = ''; // Clear input field
+                uniqueIdInput.value = '';
                 // After clearing, restart the scanner for the next scan
-                html5QrCode.render(onScanSuccess);
+                startScanner();
             } catch (error) {
                 console.error('Error updating Google Sheet:', error);
                 showMessage('Failed to send request to inventory. Please check your URL and internet connection.', 'bg-red-100 text-red-700');
